@@ -77,3 +77,20 @@ def get_stats_of_url(short_url):
     db_conn.close()
     return jsonify({'error': 'URL not found'}), 404
 
+@app.route('/<short_url/', method="DELETE")
+def delete_url(short_url):
+    """
+    Deletes a URL
+    Takes the short url from url slug and deletes the URL from the database
+    """
+    db_conn=sqlite3.connect('urls.db')
+    db_cursor=db_conn.cursor()
+    try:
+        db_cursor.execute("DELETE FROM urls WHERE short_url = ?", (short_url,))
+        db_conn.commit()
+        db_conn.close()
+
+        return jsonify({'message': 'URL deleted'})
+    except sqlite3.Error as e:
+        return jsonify({'error': str(e)}), 500
+    
