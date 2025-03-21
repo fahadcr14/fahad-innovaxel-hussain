@@ -34,7 +34,7 @@ def shorten():
     """Shortens a URL"""
     data = request.get_json()
     original_url = data['url']
-    short_url = f"innovaxel/{generate_short_url(original_url)}"
+    short_url = f"{generate_short_url(original_url)}"
     db_conn=sqlite3.connect('urls.db')
     db_cursor=db_conn.cursor()
     try: 
@@ -122,6 +122,7 @@ def update_url(shorten_url):
 @app.route("/")
 def index():
      return render_template('index.html')
+
 if __name__ == '__main__':
     db_init()
     app.run()
