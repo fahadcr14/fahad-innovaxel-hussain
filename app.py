@@ -15,6 +15,8 @@ def db_init():
     db_conn.commit()
     db_conn.close()
 
+def get_db_connection():
+    return sqlite3.connect('urls.db')
 
 
 def generate_short_url(original_url):
@@ -35,35 +37,33 @@ def shorten():
     data = request.get_json()
     original_url = data['url']
     short_url = f"{generate_short_url(original_url)}"
-    db_conn=sqlite3.connect('urls.db')
-    db_cursor=db_conn.cursor()
-    try: 
-        db_cursor.execute("SELECT short_url FROM urls WHERE original_url = ?", (original_url,))
-        existing_short_url = db_cursor.fetchone()
-        if existing_short_url:
-            return jsonify({'short_url': existing_short_url[0]})
-    except sqlite3.Error as e:
-        return jsonify({'error': str(e)}), 500
-    db_cursor.execute("INSERT INTO urls (short_url, original_url) VALUES (?, ?)", (short_url, original_url))
-    db_conn.commit()
-    db_conn.close()
-    return jsonify({'short_url': short_url})
+    with get_db_connection() as db_conn:
+        db_cursor=db_conn.cursor()
+        try: 
+            db_cursor.execute("SELECT short_url FROM urls WHERE original_url = ?", (original_url,))
+            existing_short_url = db_cursor.fetchone()
+            if existing_short_url:
+                return jsonify({'short_url': existing_short_url[0]})
+        except sqlite3.Error as e:
+            return jsonify({'error': str(e)}), 500
+        db_cursor.execute("INSERT INTO urls (short_url, original_url) VALUES (?, ?)", (short_url, original_url))
+        db_conn.commit()
+        return jsonify({'short_url': short_url})
 
 
 @app.route('/<shorten_url>', methods=['GET'])
 def redirect_to_original(shorten_url):
     """Redirects to the original URL"""
-    db_conn=sqlite3.connect('urls.db')
-    db_cursor=db_conn.cursor()
-    db_cursor.execute("SELECT original_url FROM urls WHERE short_url = ?", (shorten_url,))
-    original_url = db_cursor.fetchone()
-    if original_url:
-        db_cursor.execute("UPDATE urls SET access_count = access_count + 1 WHERE short_url = ?", (shorten_url,))
-        db_conn.commit()
-        db_conn.close()
-        return redirect(original_url[0])
-    db_conn.close() #closing the connection
-    return jsonify({'error': 'URL not found'}), 404
+    with get_db_connection() as db_conn:
+        db_cursor=db_conn.cursor()
+        db_cursor.execute("SELECT original_url FROM urls WHERE short_url = ?", (shorten_url,))
+        original_url = db_cursor.fetchone()
+        if original_url:
+            db_cursor.execute("UPDATE urls SET access_count = access_count + 1 WHERE short_url = ?", (shorten_url,))
+            db_conn.commit()
+            return redirect(original_url[0])
+        db_conn.close() #closing the connection
+        return jsonify({'error': 'URL not found'}), 404
 
 
 @app.route('/stats/<shorten_url>/' , methods=["GET"])
@@ -74,15 +74,15 @@ def get_stats_of_url(shorten_url):
 
     
     """
-    db_conn=sqlite3.connect('urls.db')
-    db_cursor=db_conn.cursor()
-    db_cursor.execute("SELECT access_count FROM urls WHERE short_url = ?", (shorten_url,))
-    access_count = db_cursor.fetchone()
-    if access_count:
+    with get_db_connection() as db_conn:
+        db_cursor=db_conn.cursor()
+        db_cursor.execute("SELECT access_count FROM urls WHERE short_url = ?", (shorten_url,))
+        access_count = db_cursor.fetchone()
+        if access_count:
+            db_conn.close()
+            return jsonify({'access_count': access_count[0]})
         db_conn.close()
-        return jsonify({'access_count': access_count[0]})
-    db_conn.close()
-    return jsonify({'error': 'URL not found'}), 404
+        return jsonify({'error': 'URL not found'}), 404
 
 @app.route('/<shorten_url>/', methods=["DELETE"])
 def delete_url(shorten_url):
@@ -109,15 +109,15 @@ def update_url(shorten_url):
     """
     data = request.get_json()
     new_url = data['url']
-    db_conn=sqlite3.connect('urls.db')
-    db_cursor=db_conn.cursor()
-    try:
-        db_cursor.execute("UPDATE urls SET original_url = ? WHERE short_url = ?", (new_url, shorten_url))
-        db_conn.commit()
-        db_conn.close()
-        return jsonify({'message': 'URL updated'})
-    except sqlite3.Error as e:
-        return jsonify({'error': str(e)}), 500
+    with get_db_connection() as db_conn:
+        db_cursor=db_conn.cursor
+        try:
+            db_cursor.execute("UPDATE urls SET original_url = ? WHERE short_url = ?", (new_url, shorten_url))
+            db_conn.commit()
+            db_conn.close()
+            return jsonify({'message': 'URL updated'})
+        except sqlite3.Error as e:
+            return jsonify({'error': str(e)}), 500
     
 @app.route("/")
 def index():
