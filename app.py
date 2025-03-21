@@ -94,3 +94,24 @@ def delete_url(short_url):
     except sqlite3.Error as e:
         return jsonify({'error': str(e)}), 500
     
+@app.route("/<short_url>/", methods=["PUT"])
+def update_url(short_url):
+    """
+    Updates a URL
+    Takes the short url from url slug and updates the URL in the database
+    """
+    data = request.get_json()
+    new_url = data['url']
+    db_conn=sqlite3.connect('urls.db')
+    db_cursor=db_conn.cursor()
+    try:
+        db_cursor.execute("UPDATE urls SET original_url = ? WHERE short_url = ?", (new_url, short_url))
+        db_conn.commit()
+        db_conn.close()
+        return jsonify({'message': 'URL updated'})
+    except sqlite3.Error as e:
+        return jsonify({'error': str(e)}), 500
+    
+if __name__ == '__main__':
+    db_init()
+    app.run()
