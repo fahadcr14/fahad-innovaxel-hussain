@@ -58,3 +58,22 @@ def redirect_to_original(short_url):
     db_conn.close() #closing the connection
     return jsonify({'error': 'URL not found'}), 404
 
+
+@app.route('/stats/<short_url>/' , method="GET")
+def get_stats_of_url(short_url):
+    """
+    Get the stats of a URL
+    Takes the short url from url slug and returns the access count of the URL
+
+    
+    """
+    db_conn=sqlite3.connect('urls.db')
+    db_cursor=db_conn.cursor()
+    db_cursor.execute("SELECT access_count FROM urls WHERE short_url = ?", (short_url,))
+    access_count = db_cursor.fetchone()
+    if access_count:
+        db_conn.close()
+        return jsonify({'access_count': access_count[0]})
+    db_conn.close()
+    return jsonify({'error': 'URL not found'}), 404
+
