@@ -68,9 +68,9 @@
       });
 
       const data = await response.json();
-      if (data.short_url) {
-        currentShortUrl = data.short_url;
-        shortenedUrlInput.value = `${window.location.origin}/${data.short_url}`;
+      if (data.shortCode) {
+        currentShortUrl = data.shortCode;
+        shortenedUrlInput.value = `${window.location.origin}/${data.shortCode}`;
         shortenedUrlSection.classList.remove("hidden");
       } else {
         alert("Failed to shorten URL.");
