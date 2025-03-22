@@ -6,6 +6,7 @@ app = Flask(__name__)
 
 def get_db_connection():
     return sqlite3.connect('urls.db')
+
 def db_init():
     """Initializes the database"""
     with get_db_connection() as db_conn:
@@ -17,6 +18,9 @@ def db_init():
                 access_count INTEGER DEFAULT 0
             )
         """)
+        db_cursor.execute("""
+        CREATE INDEX IF NOT EXISTS idx_shortCode ON urls (shortCode)
+    """)
         db_conn.commit()
         db_conn.close()
   
