@@ -95,11 +95,11 @@ def get_stats_of_url(shorten_url):
     """
     with get_db_connection() as db_conn:
         db_cursor=db_conn.cursor()
-        db_cursor.execute("SELECT access_count FROM urls WHERE short_url = ?", (shorten_url,))
-        access_count = db_cursor.fetchone()
-        if access_count:
+        db_cursor.execute("SELECT * FROM urls WHERE short_url = ?", (shorten_url,))
+        row_data = db_cursor.fetchone()
+        if row_data:
             db_conn.close()
-            return jsonify({'access_count': access_count[0]})
+            return jsonify(dict(row_data))
         db_conn.close()
         return jsonify({'error': 'URL not found'}), 404
 
@@ -116,7 +116,7 @@ def delete_url(shorten_url):
         db_conn.commit()
         db_conn.close()
 
-        return jsonify({'message': 'URL deleted'})
+        return  jsonify({'message': 'URL deleted'}),204
     except sqlite3.Error as e:
         return jsonify({'error': str(e)}), 500
     
