@@ -32,7 +32,7 @@ def db_init():
                 updatedAt TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             )
         """)
-        db_conn.execute("""
+        db_cursor.execute("""
         CREATE INDEX IF NOT EXISTS idx_shortCode ON urls (shortCode)
     """)
         db_conn.commit()
