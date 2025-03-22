@@ -4,19 +4,23 @@ import sqlite3
 
 app = Flask(__name__)
 
-
-
-
-def db_init():
-    """Initializes the database"""
-    db_conn=sqlite3.connect('urls.db')
-    db_cursor=db_conn.cursor()
-    db_cursor.execute("CREATE TABLE IF NOT EXISTS urls (id INTEGER PRIMARY KEY, short_url TEXT UNIQUE, original_url TEXT, access_count INTEGER DEFAULT 0)")
-    db_conn.commit()
-    db_conn.close()
-
 def get_db_connection():
     return sqlite3.connect('urls.db')
+def db_init():
+    """Initializes the database"""
+    with get_db_connection() as db_conn:
+        db_cursor=db_conn.cursor()
+        db_cursor.execute("""
+            CREATE TABLE IF NOT EXISTS urls (
+                short_url TEXT PRIMARY KEY,
+                original_url TEXT NOT NULL,
+                access_count INTEGER DEFAULT 0
+            )
+        """)
+        db_conn.commit()
+        db_conn.close()
+  
+
 
 
 def generate_short_url(original_url):
