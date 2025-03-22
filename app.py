@@ -17,7 +17,7 @@ def get_db_connection():
         user=os.getenv("SHORTURL_POSTGRES_USER"),
         password=os.getenv("SHORTURL_POSTGRES_PASSWORD"),
         host=os.getenv("SHORTURL_POSTGRES_HOST"),
-        port="5432",  
+        # port="5432",  
         sslmode="require"
     )
     return conn
@@ -186,4 +186,4 @@ def index():
 
 if __name__ == '__main__':
     db_init()
-    app.run(debug=True)
+    app.run(debug=False)
