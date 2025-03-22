@@ -102,8 +102,8 @@
       if (action === 'update') {
         const newUrl = prompt("Enter the new URL:");
         if (!newUrl) return;
-
-        const res = await fetch(apiUrl, {
+        const updateUrl = `${window.location.origin}/shorten/${currentShortUrl}/`;
+        const res = await fetch(updateUrl, {
           method: "PUT",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ url: newUrl })

@@ -3,6 +3,9 @@ import hashlib
 import psycopg2
 import os
 from dotenv import load_dotenv
+from datetime import datetime
+import random
+import string
 
 load_dotenv()
 
@@ -39,7 +42,11 @@ def db_init():
  
   
 
-
+def return_json(row_data):
+    
+    row_json={'shortCode': row_data[0], 'original_url': row_data[1], 'access_count': row_data[2], 'createdAt': row_data[3], 'updatedAt': row_data[4]}
+    if row_data:
+        return row_json
 
 def generate_shortCode(original_url):
     """
@@ -48,22 +55,23 @@ def generate_shortCode(original_url):
     :return: The short URL
     Logic > By hashing the original URL and taking the first 6 characters of the hash,
     i am generating the short URL
-    
+    >> added salt because of original updated but short code same when original again post it gives error so use salt 
     """
-    return hashlib.md5(original_url.encode()).hexdigest()[:6]
+    salt = ''.join(random.choices(string.ascii_letters + string.digits, k=3))
+    hash_input = (original_url + salt).encode()
 
-def is_url_exist(db_cursor,original_url):
-    """
-    Check if the URL already exists in the database
-    """
-    with get_db_connection() as db_conn:
-        db_cursor=db_conn.cursor()
+    return hashlib.md5(hash_input).hexdigest()[:6]
+
+def is_url_exist(db_cursor,shorten_url="", original_url=""):
+    """Check if the URL already exists in the database"""
+    if shorten_url:
+        db_cursor.execute("SELECT shortCode FROM urls WHERE shortCode = %s", (shorten_url,))
+    else:
         db_cursor.execute("SELECT shortCode FROM urls WHERE original_url = %s", (original_url,))
-
-        existing_shortCode = db_cursor.fetchone()
-        if existing_shortCode:
-            return existing_shortCode[0]
-        return None
+    existing_shortCode = db_cursor.fetchone()
+    if existing_shortCode:
+        return existing_shortCode[0]
+    return None
 @app.route('/shorten', methods=['POST'])
 def shorten():
     """Shortens a URL"""
@@ -73,9 +81,9 @@ def shorten():
     with get_db_connection() as db_conn:
         db_cursor=db_conn.cursor()
         try: 
-            existing_shortCode = is_url_exist(db_cursor,original_url)
+            existing_shortCode = is_url_exist(db_cursor,original_url=original_url)
             if existing_shortCode:
-                return jsonify({'shortCode': existing_shortCode[0]})
+                return jsonify({'shortCode': existing_shortCode,"message":"URL already exists"}),200
         except psycopg2.Error as e:
             return jsonify({'error': str(e)}), 500
         attempt=0
@@ -84,10 +92,11 @@ def shorten():
                 return jsonify({'error': 'Failed to shorten the URL'}), 500
             try:
                 db_cursor.execute("INSERT INTO urls (shortCode, original_url) VALUES (%s, %s)", (shortCode, original_url))
-                db_cursor.execute("INSERT INTO urls (shortCode, original_url) VALUES (%s, %s)", (shortCode, original_url))
-
                 db_conn.commit()
-                return jsonify({'shortCode': shortCode})
+                db_cursor.execute("SELECT * FROM urls WHERE shortCode = %s", (shortCode,))
+                row_data = db_cursor.fetchone()
+
+                return jsonify(return_json(row_data)),201
             except psycopg2.IntegrityError:
                 attempt+=1
                 shortCode = f"{generate_shortCode(original_url)}"
@@ -106,7 +115,7 @@ def redirect_to_original(shorten_url):
         if original_url:
             db_cursor.execute("UPDATE urls SET access_count = access_count + 1 WHERE shortCode = %s", (shorten_url,))
             db_conn.commit()
-            return redirect(original_url[0])
+            return redirect(original_url[0]),302
         return jsonify({'error': 'URL not found'}), 404
 
 
@@ -118,13 +127,16 @@ def get_stats_of_url(shorten_url):
     """
     with get_db_connection() as db_conn:
         db_cursor=db_conn.cursor()
+        if not is_url_exist(db_cursor,shorten_url=shorten_url):
+                return jsonify({'error': 'URL not exists'}),404
         db_cursor.execute("SELECT * FROM urls WHERE shortCode = %s", (shorten_url,))
         row_data = db_cursor.fetchone()
-        print(row_data)
+        # print(row_data)
 
-        if row_data:
-            return jsonify({'shortCode': row_data[0], 'original_url': row_data[1], 'access_count': row_data[2], 'createdAt': row_data[3], 'updatedAt': row_data[4]})
-        return jsonify({'error': 'URL not found'}), 404
+        try:
+            return return_json(row_data),200   
+        except psycopg2.Error as e:
+            return jsonify({'error': 'URL not found'}), 404
 
 @app.route('/<shorten_url>/', methods=["DELETE"])
 def delete_url(shorten_url):
@@ -132,17 +144,17 @@ def delete_url(shorten_url):
     Deletes a URL
     Takes the short url from url slug and deletes the URL from the database
     """
-    db_conn=psycopg2.connect('urls.db')
-    db_cursor=db_conn.cursor()
-    try:
-        db_cursor.execute("DELETE FROM urls WHERE shortCode = %s", (shorten_url,))
-        db_conn.commit()
+    with get_db_connection() as db_conn:
+        db_cursor=db_conn.cursor()
+        try:
+            db_cursor.execute("DELETE FROM urls WHERE shortCode = %s", (shorten_url,))
+            db_conn.commit()
 
-        return  jsonify({'message': 'URL deleted'}),204
-    except psycopg2.Error as e:
-        return jsonify({'error': str(e)}), 500
+            return  jsonify({'message': 'URL deleted'}),204
+        except psycopg2.Error as e:
+            return jsonify({'error': str(e)}), 500
     
-@app.route("/<shorten_url>/", methods=["PUT"])
+@app.route("/shorten/<shorten_url>/", methods=["PUT"])
 def update_url(shorten_url):
     """
     Updates a URL
@@ -151,15 +163,22 @@ def update_url(shorten_url):
     data = request.get_json()
     new_url = data['url']
     with get_db_connection() as db_conn:
-        db_cursor=db_conn.cursor
+        db_cursor=db_conn.cursor()
         try:
-            if not is_url_exist(db_cursor,new_url):
+            if not is_url_exist(db_cursor,shorten_url=shorten_url):
                 return jsonify({'error': 'URL not exists'}),404
-            db_cursor.execute("UPDATE urls SET original_url = %s WHERE shortCode = %s", (new_url, shorten_url))
+            db_cursor.execute("""
+            UPDATE urls 
+            SET original_url = %s, updatedAt = %s 
+            WHERE shortCode = %s
+        """, (new_url, datetime.now(), shorten_url))
             db_conn.commit()
-            return jsonify({'message': 'URL updated'})
+            db_cursor.execute("SELECT * FROM  urls WHERE shortCode = %s",(shorten_url,))
+            row_data = db_cursor.fetchone()
+
+            return jsonify(return_json(row_data)),200
         except psycopg2.Error as e:
-            return jsonify({'error': str(e)}), 500
+            return jsonify({'error': str(e)}), 400
     
 @app.route("/")
 def index():
