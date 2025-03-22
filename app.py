@@ -1,11 +1,23 @@
-from flask import Flask, request, jsonify, redirect,render_template
+from flask import Flask, request, jsonify, redirect, render_template
 import hashlib
-import sqlite3
+import psycopg2
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
 def get_db_connection():
-    return sqlite3.connect('urls.db')
+    conn = psycopg2.connect(
+        dbname=os.getenv("SHORTURL_POSTGRES_DATABASE"),
+        user=os.getenv("SHORTURL_POSTGRES_USER"),
+        password=os.getenv("SHORTURL_POSTGRES_PASSWORD"),
+        host=os.getenv("SHORTURL_POSTGRES_HOST"),
+        port="5432",  
+        sslmode="require"
+    )
+    return conn
 
 def db_init():
     """Initializes the database"""
@@ -46,7 +58,8 @@ def is_url_exist(db_cursor,original_url):
     """
     with get_db_connection() as db_conn:
         db_cursor=db_conn.cursor()
-        db_cursor.execute("SELECT shortCode FROM urls WHERE original_url = ?", (original_url,))
+        db_cursor.execute("SELECT shortCode FROM urls WHERE original_url = %s", (original_url,))
+
         existing_shortCode = db_cursor.fetchone()
         if existing_shortCode:
             return existing_shortCode[0]
@@ -63,17 +76,19 @@ def shorten():
             existing_shortCode = is_url_exist(db_cursor,original_url)
             if existing_shortCode:
                 return jsonify({'shortCode': existing_shortCode[0]})
-        except sqlite3.Error as e:
+        except psycopg2.Error as e:
             return jsonify({'error': str(e)}), 500
         attempt=0
         while True:
             if attempt>10:
                 return jsonify({'error': 'Failed to shorten the URL'}), 500
             try:
-                db_cursor.execute("INSERT INTO urls (shortCode, original_url) VALUES (?, ?)", (shortCode, original_url))
+                db_cursor.execute("INSERT INTO urls (shortCode, original_url) VALUES (%s, %s)", (shortCode, original_url))
+                db_cursor.execute("INSERT INTO urls (shortCode, original_url) VALUES (%s, %s)", (shortCode, original_url))
+
                 db_conn.commit()
                 return jsonify({'shortCode': shortCode})
-            except sqlite3.IntegrityError:
+            except psycopg2.IntegrityError:
                 attempt+=1
                 shortCode = f"{generate_shortCode(original_url)}"
                 continue
@@ -86,10 +101,10 @@ def redirect_to_original(shorten_url):
     """Redirects to the original URL"""
     with get_db_connection() as db_conn:
         db_cursor=db_conn.cursor()
-        db_cursor.execute("SELECT original_url FROM urls WHERE shortCode = ?", (shorten_url,))
+        db_cursor.execute("SELECT original_url FROM urls WHERE shortCode = %s", (shorten_url,))
         original_url = db_cursor.fetchone()
         if original_url:
-            db_cursor.execute("UPDATE urls SET access_count = access_count + 1 WHERE shortCode = ?", (shorten_url,))
+            db_cursor.execute("UPDATE urls SET access_count = access_count + 1 WHERE shortCode = %s", (shorten_url,))
             db_conn.commit()
             return redirect(original_url[0])
         return jsonify({'error': 'URL not found'}), 404
@@ -103,7 +118,7 @@ def get_stats_of_url(shorten_url):
     """
     with get_db_connection() as db_conn:
         db_cursor=db_conn.cursor()
-        db_cursor.execute("SELECT * FROM urls WHERE shortCode = ?", (shorten_url,))
+        db_cursor.execute("SELECT * FROM urls WHERE shortCode = %s", (shorten_url,))
         row_data = db_cursor.fetchone()
         print(row_data)
 
@@ -117,14 +132,14 @@ def delete_url(shorten_url):
     Deletes a URL
     Takes the short url from url slug and deletes the URL from the database
     """
-    db_conn=sqlite3.connect('urls.db')
+    db_conn=psycopg2.connect('urls.db')
     db_cursor=db_conn.cursor()
     try:
-        db_cursor.execute("DELETE FROM urls WHERE shortCode = ?", (shorten_url,))
+        db_cursor.execute("DELETE FROM urls WHERE shortCode = %s", (shorten_url,))
         db_conn.commit()
 
         return  jsonify({'message': 'URL deleted'}),204
-    except sqlite3.Error as e:
+    except psycopg2.Error as e:
         return jsonify({'error': str(e)}), 500
     
 @app.route("/<shorten_url>/", methods=["PUT"])
@@ -140,10 +155,10 @@ def update_url(shorten_url):
         try:
             if not is_url_exist(db_cursor,new_url):
                 return jsonify({'error': 'URL not exists'}),404
-            db_cursor.execute("UPDATE urls SET original_url = ? WHERE shortCode = ?", (new_url, shorten_url))
+            db_cursor.execute("UPDATE urls SET original_url = %s WHERE shortCode = %s", (new_url, shorten_url))
             db_conn.commit()
             return jsonify({'message': 'URL updated'})
-        except sqlite3.Error as e:
+        except psycopg2.Error as e:
             return jsonify({'error': str(e)}), 500
     
 @app.route("/")
