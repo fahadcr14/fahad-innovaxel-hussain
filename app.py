@@ -54,9 +54,20 @@ def shorten():
                 return jsonify({'short_url': existing_short_url[0]})
         except sqlite3.Error as e:
             return jsonify({'error': str(e)}), 500
-        db_cursor.execute("INSERT INTO urls (short_url, original_url) VALUES (?, ?)", (short_url, original_url))
-        db_conn.commit()
-        return jsonify({'short_url': short_url})
+        attempt=0
+        while True:
+            if attempt>10:
+                return jsonify({'error': 'Failed to shorten the URL'}), 500
+            try:
+                db_cursor.execute("INSERT INTO urls (short_url, original_url) VALUES (?, ?)", (short_url, original_url))
+                db_conn.commit()
+                return jsonify({'short_url': short_url})
+            except sqlite3.IntegrityError:
+                attempt+=1
+                short_url = f"{generate_short_url(original_url)}"
+                continue
+            
+        
 
 
 @app.route('/<shorten_url>', methods=['GET'])
